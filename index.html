@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>火山噴火タイプ識別ガイド</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .eruption-card { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; }
+    .eruption-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+    .eruption-card.selected { ring: 2px; }
+    .vei-bar { height: 8px; border-radius: 4px; }
+    .quiz-btn { transition: all 0.2s; }
+    .quiz-btn:hover { transform: scale(1.02); }
+    .quiz-btn.selected-opt { opacity: 0.6; }
+    input:focus, select:focus { outline: none; }
+    .eruption-visual { font-size: 48px; line-height: 1; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-orange-50 to-red-100 min-h-screen font-sans">
+
+<div class="max-w-3xl mx-auto px-4 py-6">
+
+  <header class="text-center mb-6">
+    <h1 class="text-2xl sm:text-3xl font-bold text-red-900 mb-1">🌋 火山噴火タイプ識別ガイド</h1>
+    <p class="text-red-600 text-sm">噴火の特徴から種類を学ぼう。識別クイズと有名火山事例付き</p>
+  </header>
+
+  <!-- Tabs -->
+  <div class="flex gap-2 mb-5 flex-wrap">
+    <button class="tab-btn px-4 py-2 rounded-full font-semibold text-sm bg-red-500 text-white" data-tab="catalog" aria-label="カタログ表示" role="tab">📋 噴火タイプ一覧</button>
+    <button class="tab-btn px-4 py-2 rounded-full font-semibold text-sm bg-gray-100 text-gray-600" data-tab="identifier" aria-label="識別ツール" role="tab">🔍 タイプ識別</button>
+    <button class="tab-btn px-4 py-2 rounded-full font-semibold text-sm bg-gray-100 text-gray-600" data-tab="volcanoes" aria-label="有名火山一覧" role="tab">🗾 有名火山</button>
+    <button class="tab-btn px-4 py-2 rounded-full font-semibold text-sm bg-gray-100 text-gray-600" data-tab="facts" aria-label="豆知識" role="tab">💡 豆知識</button>
+  </div>
+
+  <!-- Tab: Catalog -->
+  <div id="tab-catalog" class="tab-content">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="eruption-cards"></div>
+  </div>
+
+  <!-- Tab: Identifier -->
+  <div id="tab-identifier" class="tab-content hidden">
+    <div class="bg-white rounded-2xl shadow-lg p-6">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">🔍 噴火タイプを識別する</h2>
+      <p class="text-sm text-gray-600 mb-5">4つの特徴に回答してください。噴火タイプを推定します。</p>
+
+      <div class="space-y-5" id="quiz-questions"></div>
+
+      <button id="btn-identify" class="mt-5 w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-all" aria-label="噴火タイプを識別する">噴火タイプを識別する</button>
+
+      <div id="identify-result" class="hidden mt-5 bg-orange-50 border border-orange-200 rounded-xl p-5">
+        <h3 class="font-bold text-orange-800 text-lg mb-2">推定結果</h3>
+        <div id="result-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Volcanoes -->
+  <div id="tab-volcanoes" class="tab-content hidden">
+    <div class="bg-white rounded-2xl shadow-lg p-5">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">🌋 有名火山の噴火タイプ</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm" role="table" aria-label="有名火山の噴火タイプ一覧">
+          <thead>
+            <tr class="bg-red-50 text-red-700">
+              <th class="text-left py-2 px-3 rounded-tl-lg">火山名</th>
+              <th class="text-left py-2 px-2">場所</th>
+              <th class="text-left py-2 px-2">噴火タイプ</th>
+              <th class="text-left py-2 px-3 rounded-tr-lg">備考</th>
+            </tr>
+          </thead>
+          <tbody id="volcano-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Facts -->
+  <div id="tab-facts" class="tab-content hidden">
+    <div class="space-y-4" id="facts-content"></div>
+  </div>
+
+</div>
+
+<script>
+const ERUPTION_TYPES = [
+  {
+    id: 'hawaiian',
+    name: 'ハワイ式',
+    nameEn: 'Hawaiian',
+    emoji: '🌺',
+    bgColor: 'bg-yellow-50',
+    borderColor: 'border-yellow-400',
+    vei: '0-1',
+    veiNum: 1,
+    lavaType: '玄武岩質・低粘性',
+    lavaFlow: true,
+    pyroclastic: false,
+    columnHeight: '低（500m以下）',
+    columnScore: 1,
+    explosivity: '穏やか',
+    explosivityScore: 1,
+    desc: '溶岩が泡立つように噴き出す穏やかな噴火。溶岩噴泉が特徴的で、低粘性の玄武岩質溶岩が流れる。火砕流は発生しない。',
+    features: ['溶岩噴泉', '溶岩チューブ', '低爆発性', 'aa溶岩・パホイホイ溶岩']
+  },
+  {
+    id: 'strombolian',
+    name: 'ストロンボリ式',
+    nameEn: 'Strombolian',
+    emoji: '🎆',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-400',
+    vei: '1-2',
+    veiNum: 2,
+    lavaType: '玄武岩〜安山岩質',
+    lavaFlow: true,
+    pyroclastic: false,
+    columnHeight: '低〜中（1〜5km）',
+    columnScore: 2,
+    explosivity: '中程度',
+    explosivityScore: 2,
+    desc: '数分〜数時間おきに規則的に爆発を繰り返す断続的な噴火。火山弾・スコリアが高く放出される。地中海のストロンボリ島が典型例。',
+    features: ['定期的爆発', '火山弾放出', 'スコリア', '赤熱マグマの噴出']
+  },
+  {
+    id: 'vulcanian',
+    name: 'ブルカノ式',
+    nameEn: 'Vulcanian',
+    emoji: '💥',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-500',
+    vei: '2-3',
+    veiNum: 3,
+    lavaType: '安山岩〜デイサイト質',
+    lavaFlow: false,
+    pyroclastic: false,
+    columnHeight: '中（5〜10km）',
+    columnScore: 3,
+    explosivity: '激しい',
+    explosivityScore: 3,
+    desc: '粘性の高いマグマが火口を塞ぎ、圧力が高まって爆発的に噴火。黒い噴煙と火山弾・火山岩塊が放出される。',
+    features: ['爆発的噴火', '黒色噴煙', '火山弾・岩塊', '間欠的爆発']
+  },
+  {
+    id: 'peléan',
+    name: 'ペレー式',
+    nameEn: 'Peléan',
+    emoji: '🌊',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-500',
+    vei: '3-4',
+    veiNum: 4,
+    lavaType: '安山岩〜流紋岩質（高粘性）',
+    lavaFlow: false,
+    pyroclastic: true,
+    columnHeight: '中〜高（5〜15km）',
+    columnScore: 3,
+    explosivity: '激しい',
+    explosivityScore: 3,
+    desc: '溶岩ドームの崩壊と火砕サージ（熱雲）が特徴。超高温・超高速の火砕流が麓に流れ下り甚大な被害をもたらす。1902年マルティニク島モンペレーの噴火が典型例。',
+    features: ['溶岩ドーム崩壊', '火砕流（熱雲）', 'ニュエ・アルダント', '側方爆発']
+  },
+  {
+    id: 'plinian',
+    name: 'プリニー式',
+    nameEn: 'Plinian',
+    emoji: '🌪️',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-500',
+    vei: '4-6',
+    veiNum: 5,
+    lavaType: '流紋岩〜デイサイト質',
+    lavaFlow: false,
+    pyroclastic: true,
+    columnHeight: '高（20〜35km）',
+    columnScore: 4,
+    explosivity: '超爆発的',
+    explosivityScore: 4,
+    desc: '非常に高い噴煙柱（成層圏に到達）と大量の火山灰・軽石の放出が特徴。大規模な火砕流・火砕サージが発生。79年ベスビオ噴火でポンペイを埋没。',
+    features: ['超高噴煙柱(20km超)', '大量火山灰', '軽石', '大規模火砕流']
+  },
+  {
+    id: 'ultraplinian',
+    name: '超プリニー式',
+    nameEn: 'Ultra-Plinian',
+    emoji: '☄️',
+    bgColor: 'bg-indigo-50',
+    borderColor: 'border-indigo-600',
+    vei: '7-8',
+    veiNum: 7,
+    lavaType: '流紋岩質（超高粘性）',
+    lavaFlow: false,
+    pyroclastic: true,
+    columnHeight: '超高（35〜50km）',
+    columnScore: 5,
+    explosivity: '超爆発的',
+    explosivityScore: 5,
+    desc: '地球史上最大規模の噴火。VEI7以上で地球規模の気候変動をもたらす。カルデラ形成を伴う。7万年前のトバ（スマトラ）噴火が代表例で人類の存続を脅かしたとされる。',
+    features: ['VEI7-8', 'カルデラ形成', '全球的気候変動', '大量絶滅リスク']
+  },
+  {
+    id: 'phreatic',
+    name: '水蒸気噴火',
+    nameEn: 'Phreatic',
+    emoji: '💨',
+    bgColor: 'bg-sky-50',
+    borderColor: 'border-sky-400',
+    vei: '0-2',
+    veiNum: 1,
+    lavaType: 'マグマ不関与（水蒸気主体）',
+    lavaFlow: false,
+    pyroclastic: false,
+    columnHeight: '低〜中（1〜5km）',
+    columnScore: 2,
+    explosivity: '中程度',
+    explosivityScore: 2,
+    desc: '地下水がマグマの熱で水蒸気化し爆発する噴火。マグマは直接関与しない。予測が困難で突発的に発生するため危険。2014年御嶽山噴火はこのタイプ。',
+    features: ['地下水由来', 'マグマ不噴出', '突発的', '水蒸気・火山灰・噴石']
+  }
+];
+
+const VOLCANOES = [
+  { name: '富士山', location: '日本（静岡/山梨）', type: 'プリニー式・ブルカノ式', note: '1707年宝永噴火はプリニー式。現在は休火山' },
+  { name: 'キラウエア', location: 'ハワイ（米国）', type: 'ハワイ式', note: '世界で最も活発な火山の一つ。溶岩流が継続的に流出' },
+  { name: 'ベスビオ（ヴェスヴィオ）', location: 'イタリア', type: 'プリニー式', note: '79年噴火でポンペイを埋没。プリニー式噴火の語源' },
+  { name: '桜島', location: '日本（鹿児島）', type: 'ブルカノ式・ストロンボリ式', note: '年間数百回以上の爆発を繰り返す活発な活火山' },
+  { name: 'ピナトゥボ', location: 'フィリピン', type: 'プリニー式', note: '1991年噴火はVEI6。20世紀最大規模の噴火の一つ' },
+  { name: 'ストロンボリ', location: 'イタリア（リパリ諸島）', type: 'ストロンボリ式', note: 'ストロンボリ式噴火の語源となった火山。「地中海の灯台」' },
+  { name: 'モンペレー', location: 'マルティニク（カリブ）', type: 'ペレー式', note: '1902年噴火で熱雲が発生し約3万人が死亡。ペレー式の語源' },
+  { name: 'エトナ', location: 'イタリア（シチリア）', type: 'ストロンボリ式・ブルカノ式', note: 'ヨーロッパ最高の活火山。多様な噴火スタイル' },
+  { name: '雲仙普賢岳', location: '日本（長崎）', type: 'ペレー式', note: '1991年噴火で溶岩ドームが崩壊し火砕流が発生' },
+  { name: '御嶽山', location: '日本（長野/岐阜）', type: '水蒸気噴火', note: '2014年突然の水蒸気噴火。登山中の犠牲者多数' },
+  { name: '三宅島', location: '日本（東京）', type: 'ストロンボリ式・ブルカノ式', note: '2000年噴火で大量の二酸化硫黄を放出。島民避難' },
+  { name: 'トバ', location: 'スマトラ（インドネシア）', type: '超プリニー式', note: '約7万年前VEI8の超巨大噴火。人類「瓶首効果」説の原因' },
+];
+
+const FACTS = [
+  { title: 'VEI（火山爆発指数）とは？', content: 'Volcanic Explosivity Index の略。0〜8のスケールで噴火の規模を表す対数スケール。VEIが1増えるごとに噴出量が約10倍になる。VEI8は観測史上最大規模の噴火を意味する。' },
+  { title: 'プリニー式の語源', content: '79年のベスビオ噴火を観察・記録した古代ローマの博物学者・政治家「大プリニウス（Pliny the Elder）」の名前に由来する。大プリニウスはこの噴火の調査中に命を落とした。' },
+  { title: '火砕流の恐怖', content: '火砕流（pyroclastic flow）は高温（700〜1000℃）のガス・火山灰・岩石の混合物が時速100〜700km以上で流れ下る現象。モンペレー噴火の「熱雲（ニュエ・アルダント）」は最初に記録された火砕流の一つ。' },
+  { title: '水蒸気噴火の危険性', content: '水蒸気噴火はマグマが地表に出てこないため「大したことない」と思われがちだが、突発性が高く予測が困難。噴石の飛距離も大きく、晴天時でも突然発生する。2014年御嶽山噴火の教訓から日本では火山防災が大幅強化された。' },
+  { title: '溶岩の種類', content: 'ハワイ語由来の「パホイホイ（Pahoehoe）」は縄状・なめらかな溶岩、「アア（Aa）」はぼこぼこして歩きにくい溶岩。どちらも玄武岩質でハワイ式噴火に典型的。冷えたとき表面がゆっくり固まるとパホイホイに、速く固まるとアアになる。' },
+  { title: '火山と文明', content: '火山の噴火は文明に甚大な影響を与えてきた。1815年タンボラ（インドネシア・VEI7）噴火は「夏のない年（1816年）」をもたらし、欧米で飢饉が発生。7万年前のトバ噴火は当時の人類を数千人まで減少させた可能性があるとされる（「瓶首効果説」）。' },
+];
+
+const QUIZ_QUESTIONS = [
+  {
+    id: 'q1',
+    text: 'Q1: 爆発の激しさはどのくらいですか？',
+    options: [
+      { label: '穏やか（溶岩が静かに流れ出す）', value: 1 },
+      { label: '中程度（時々爆発する）', value: 2 },
+      { label: '激しい（強い爆発・噴石）', value: 3 },
+      { label: '超爆発的（巨大な噴煙柱）', value: 4 }
+    ]
+  },
+  {
+    id: 'q2',
+    text: 'Q2: 溶岩流は発生していますか？',
+    options: [
+      { label: 'あり（溶岩が流れ出す）', value: true },
+      { label: 'なし（溶岩流なし）', value: false }
+    ]
+  },
+  {
+    id: 'q3',
+    text: 'Q3: 火砕流（高温の火山物質の流れ）はありますか？',
+    options: [
+      { label: 'あり（火砕流・熱雲が発生）', value: true },
+      { label: 'なし（火砕流なし）', value: false }
+    ]
+  },
+  {
+    id: 'q4',
+    text: 'Q4: 噴煙柱はどのくらいの高さですか？',
+    options: [
+      { label: '低（〜1km程度）', value: 1 },
+      { label: '中（1〜10km）', value: 2 },
+      { label: '高（10〜25km）', value: 3 },
+      { label: '超高（25km以上）', value: 4 }
+    ]
+  }
+];
+
+let quizAnswers = {};
+
+// Render eruption cards
+function renderCatalog() {
+  const container = document.getElementById('eruption-cards');
+  container.innerHTML = ERUPTION_TYPES.map(t => `
+    <div class="eruption-card rounded-2xl border-2 ${t.bgColor /* xss-ok: ERUPTION_TYPESハードコード配列のbgColor */} ${t.borderColor /* xss-ok: ERUPTION_TYPESハードコード配列のborderColor */} p-4 shadow">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-3xl">${t.emoji /* xss-ok: ERUPTION_TYPESハードコード配列のemoji */}</span>
+        <div>
+          <div class="font-bold text-gray-800">${t.name /* xss-ok: ERUPTION_TYPESハードコード配列のname */}</div>
+          <div class="text-xs text-gray-400">${t.nameEn /* xss-ok: ERUPTION_TYPESハードコード配列のnameEn */}</div>
+        </div>
+        <div class="ml-auto text-right">
+          <div class="text-xs text-gray-500">VEI</div>
+          <div class="font-bold text-sm text-gray-700">${t.vei /* xss-ok: ERUPTION_TYPESハードコード配列のvei */}</div>
+        </div>
+      </div>
+      <div class="mb-2">
+        <div class="text-xs text-gray-500 mb-1">爆発規模</div>
+        <div class="bg-gray-200 rounded-full h-2">
+          <div class="vei-bar bg-red-500 rounded-full" style="width:${(t.veiNum/8)*100 /* xss-ok: 整数の算術結果 */}%"></div>
+        </div>
+      </div>
+      <p class="text-xs text-gray-600 mb-2 leading-relaxed">${t.desc /* xss-ok: ERUPTION_TYPESハードコード配列のdesc */}</p>
+      <div class="text-xs text-gray-500 mb-1">
+        <strong>溶岩タイプ:</strong> ${t.lavaType /* xss-ok: ERUPTION_TYPESハードコード配列のlavaType */}
+      </div>
+      <div class="text-xs text-gray-500 mb-2">
+        <strong>噴煙高度:</strong> ${t.columnHeight /* xss-ok: ERUPTION_TYPESハードコード配列のcolumnHeight */}
+      </div>
+      <div class="flex flex-wrap gap-1">
+        ${t.features.map(f => `<span class="text-xs bg-white bg-opacity-70 px-2 py-0.5 rounded-full text-gray-600">${f /* xss-ok: ERUPTION_TYPESハードコード配列のfeatures */}</span>`).join('')}
+      </div>
+      <div class="mt-2 flex gap-2 text-xs">
+        <span class="px-2 py-0.5 rounded-full ${t.lavaFlow ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400'}">溶岩流: ${t.lavaFlow ? 'あり' : 'なし'}</span>
+        <span class="px-2 py-0.5 rounded-full ${t.pyroclastic ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400'}">火砕流: ${t.pyroclastic ? 'あり' : 'なし'}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Render identifier quiz
+function renderIdentifier() {
+  const container = document.getElementById('quiz-questions');
+  container.innerHTML = QUIZ_QUESTIONS.map(q => `
+    <div>
+      <p class="font-semibold text-gray-700 mb-2 text-sm">${q.text /* xss-ok: QUIZ_QUESTIONSハードコード配列のtext */}</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        ${q.options.map((opt, i) => `
+          <button class="quiz-btn text-left bg-gray-50 hover:bg-orange-50 border-2 border-gray-200 hover:border-orange-400 rounded-xl px-3 py-2 text-sm transition-all"
+            data-qid="${q.id /* xss-ok: QUIZ_QUESTIONSハードコード配列のid */}" data-val="${opt.value /* xss-ok: QUIZ_QUESTIONSハードコード配列のoption.value */}" aria-label="${opt.label /* xss-ok: QUIZ_QUESTIONSハードコード配列のoption.label */}を選択">
+            ${opt.label /* xss-ok: QUIZ_QUESTIONSハードコード配列のoption.label */}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.quiz-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qid = btn.dataset.qid;
+      const val = btn.dataset.val;
+      // Convert string to appropriate type
+      let v = val;
+      if (val === 'true') v = true;
+      else if (val === 'false') v = false;
+      else v = parseInt(val);
+      quizAnswers[qid] = v;
+
+      // Visual update: deselect others in group
+      container.querySelectorAll(`[data-qid="${qid}"]`).forEach(b => {
+        b.classList.remove('bg-orange-100', 'border-orange-500', 'font-semibold');
+        b.classList.add('bg-gray-50', 'border-gray-200');
+      });
+      btn.classList.add('bg-orange-100', 'border-orange-500', 'font-semibold');
+      btn.classList.remove('bg-gray-50', 'border-gray-200');
+    });
+  });
+}
+
+// Identify eruption type
+function identifyEruption() {
+  const answered = Object.keys(quizAnswers);
+  if (answered.length < 4) {
+    alert('すべての質問に回答してください。');
+    return;
+  }
+
+  const { q1, q2, q3, q4 } = quizAnswers;
+
+  let matches = ERUPTION_TYPES.map(t => {
+    let score = 0;
+    if (q1 === t.explosivityScore) score += 3;
+    else if (Math.abs(q1 - t.explosivityScore) === 1) score += 1;
+    if (q2 === t.lavaFlow) score += 3;
+    if (q3 === t.pyroclastic) score += 3;
+    if (q4 === t.columnScore) score += 2;
+    else if (Math.abs(q4 - t.columnScore) === 1) score += 1;
+    return { type: t, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const best = matches[0];
+  const second = matches[1];
+  const t = best.type;
+
+  document.getElementById('result-content').innerHTML = `
+    <div class="flex items-center gap-3 mb-3">
+      <span class="text-4xl">${t.emoji /* xss-ok: ERUPTION_TYPESハードコード配列のemoji */}</span>
+      <div>
+        <div class="text-xl font-bold text-gray-800">${t.name /* xss-ok: ERUPTION_TYPESハードコード配列のname */}（${t.nameEn /* xss-ok: ERUPTION_TYPESハードコード配列のnameEn */}）</div>
+        <div class="text-sm text-gray-500">VEI ${t.vei /* xss-ok: ERUPTION_TYPESハードコード配列のvei */} / ${t.columnHeight /* xss-ok: ERUPTION_TYPESハードコード配列のcolumnHeight */}の噴煙</div>
+      </div>
+    </div>
+    <p class="text-sm text-gray-700 mb-3">${t.desc /* xss-ok: ERUPTION_TYPESハードコード配列のdesc */}</p>
+    <div class="bg-orange-100 rounded-lg p-3 text-sm text-orange-800 mb-2">
+      <strong>主な特徴:</strong> ${t.features.join('・') /* xss-ok: ERUPTION_TYPESハードコード配列のfeaturesを結合 */}
+    </div>
+    ${second && second.score > 3 ? `<p class="text-xs text-gray-500">次に近い可能性: <strong>${second.type.name /* xss-ok: ERUPTION_TYPESハードコード配列のname */}</strong></p>` : ''}
+  `;
+  document.getElementById('identify-result').classList.remove('hidden');
+}
+
+// Render volcano table
+function renderVolcanoes() {
+  const tbody = document.getElementById('volcano-table');
+  tbody.innerHTML = VOLCANOES.map((v, i) => `
+    <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-red-50'} hover:bg-orange-50">
+      <td class="py-2 px-3 font-semibold text-gray-800">${v.name /* xss-ok: VOLCANOESハードコード配列のname */}</td>
+      <td class="py-2 px-2 text-gray-600 text-xs">${v.location /* xss-ok: VOLCANOESハードコード配列のlocation */}</td>
+      <td class="py-2 px-2"><span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">${v.type /* xss-ok: VOLCANOESハードコード配列のtype */}</span></td>
+      <td class="py-2 px-3 text-xs text-gray-500">${v.note /* xss-ok: VOLCANOESハードコード配列のnote */}</td>
+    </tr>
+  `).join('');
+}
+
+// Render facts
+function renderFacts() {
+  const container = document.getElementById('facts-content');
+  container.innerHTML = FACTS.map((f, i) => `
+    <div class="bg-white rounded-2xl shadow p-5">
+      <h3 class="font-bold text-gray-800 mb-2 flex items-center gap-2"><span class="text-orange-500">💡</span>${f.title /* xss-ok: FACTSハードコード配列のtitle */}</h3>
+      <p class="text-sm text-gray-600 leading-relaxed">${f.content /* xss-ok: FACTSハードコード配列のcontent */}</p>
+    </div>
+  `).join('');
+}
+
+// Tab switching
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('bg-red-500', 'text-white');
+    btn.classList.add('bg-gray-100', 'text-gray-600');
+  });
+  document.getElementById('tab-' + name).classList.remove('hidden');
+  document.querySelector(`[data-tab="${name}"]`).classList.add('bg-red-500', 'text-white');
+  document.querySelector(`[data-tab="${name}"]`).classList.remove('bg-gray-100', 'text-gray-600');
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+document.getElementById('btn-identify').addEventListener('click', identifyEruption);
+
+// Init
+renderCatalog();
+renderIdentifier();
+renderVolcanoes();
+renderFacts();
+</script>
+</body>
+</html>
